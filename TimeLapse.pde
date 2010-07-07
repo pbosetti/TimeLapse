@@ -1,5 +1,4 @@
 #include <MsTimer2.h>
-#include <EEPROM.h>
 #include "eeprom.h"
 #include "buttons.h"
 

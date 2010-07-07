@@ -1,3 +1,6 @@
+#ifndef eeprom_h
+#define eeprom_h
+
 #include "WProgram.h"
 
 // Support functions
@@ -21,3 +24,4 @@ int EEPROM_read(int ee, T& value)
   return i;
 }
 
+#endif

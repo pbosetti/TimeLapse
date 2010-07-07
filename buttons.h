@@ -1,8 +1,11 @@
+#ifndef buttons_h
+#define buttons_h
+
 #include "WProgram.h"
 
 class ButtonsClass {
 public:
-  ButtonsClass(unsigned int s);
+  ButtonsClass(unsigned int );
   ~ButtonsClass();
   void read();
   char * buttons;
@@ -13,4 +16,4 @@ private:
   unsigned int delta;
 };
 
-
+#endif
