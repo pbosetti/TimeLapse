@@ -1,4 +1,5 @@
 #include <MsTimer2.h>
+#include <EEPROM.h>
 #include "eeprom.h"
 #include "buttons.h"
 
@@ -10,8 +11,8 @@
 #define BAUD        9600
 #define LOOP_DELAY  100
 #define SHOOT_DELAY 500
-#define RUNNING_LED 8
-#define SHOOT_LED   9
+#define RUNNING_LED 13
+#define SHOOT_LED   8
 #define TRIGGER_PIN 10
 #define SEL_B       2
 #define INC_B       3
@@ -22,18 +23,24 @@
 // Globals
 unsigned int g_period = 0;
 bool g_running = false;
-char g_pins[3] = {RUNNING_LED, SHOOT_LED, TRIGGER_PIN};
-ButtonsClass g_buttons(4);
+bool g_logging = false;
+char g_pins[3] = {
+  RUNNING_LED, SHOOT_LED, TRIGGER_PIN};
+ButtonsClass g_buttons(SEL_B, INC_B, DEC_B, CYC_B);
 
 
 
-void isr() {
+void isr_shoot() {
   digitalWrite(SHOOT_LED, HIGH);
   digitalWrite(TRIGGER_PIN, HIGH);
-  delay(SHOOT_DELAY);
+  delayMicroseconds(SHOOT_DELAY * 1000);
   digitalWrite(SHOOT_LED, LOW);  
   digitalWrite(TRIGGER_PIN, LOW);
-  return;
+  if (g_buttons.count > 0) {
+    g_buttons.count--;
+    if (g_buttons.count == 0)
+      g_buttons.shooting = false;
+  }
 }
 
 void toggle() {
@@ -56,6 +63,7 @@ void toggle() {
     Serial1.write(0xFE);
     Serial1.write(64+128);
     Serial1.print("Acquiring");
+    MsTimer2::set(g_period, isr_shoot);
     MsTimer2::start();
     g_running = true;
     digitalWrite(RUNNING_LED, HIGH);
@@ -94,12 +102,9 @@ void setup() {
   }
 
   // Button pins (also set the pullup resistors)
-  for(p=0; p<4; p++) {
-    pinMode(g_buttons.buttons[p], INPUT);
-    digitalWrite(g_buttons.buttons[p], HIGH);
-  }
+  g_buttons.pin_setup(HIGH);
 
-  MsTimer2::set(g_period, isr);
+  MsTimer2::set(g_period, isr_shoot);
   READY;
 }
 
@@ -119,24 +124,63 @@ void loop() {
     // Serial command parsing:
     switch(ch) {
     case '/':
-      toggle();
+      g_logging = ! g_logging;
       break;
     case '0'...'9': // Accumulates values
       v = v * 10 + ch - '0';
       break;
-    case 'p':
+    case 'm':
+      g_buttons.min = constrain(v,0,59);
       v = 0;
+      break;
+    case 's':
+      g_buttons.sec = constrain(v,0,59);
+      v = 0;
+      break;
+    case 'c':
+      g_buttons.count = constrain(v,0,9999);
+      v = 0;
+      break;
+    case 't':
+      g_buttons.shooting = !g_buttons.shooting;
       break;
     }
   }
 
   g_buttons.read();
-  int i;
-  for(i=0; i<4; i++)
-    Serial.print(g_buttons.states[i]);
-   Serial.println();
-
+  if (g_running != g_buttons.shooting)
+    toggle();
+  g_period = g_buttons.lapse() * 1000;
+  if (g_logging) {
+    for(int i=0; i<4; i++)
+      Serial.print(g_buttons.states[i]);
+    Serial.print(" ");
+    Serial.print(g_buttons.selection);
+    Serial.print(" ");
+    Serial.print(g_buttons.shooting ? 1 : 0);
+    Serial.print(" ");
+    Serial.print(g_buttons.min);
+    Serial.print(":");
+    Serial.print(g_buttons.sec);
+    Serial.print(" ");
+    Serial.print(g_buttons.count);
+    Serial.print(" ");
+    Serial.print(g_buttons.lapse());
+    Serial.print(" ");  
+    Serial.print(g_buttons.duration().min);
+    Serial.print(":");
+    Serial.print(g_buttons.duration().sec);
+    Serial.println();
+  }
   delay(LOOP_DELAY);
 }
+
+
+
+
+
+
+
+
 
 
