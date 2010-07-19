@@ -5,7 +5,7 @@
 #include "lcd.h"
 
 // Code version:
-#define CODEID "TimeLapse 0.3 "
+#define CODEID "TimeLapse 0.3b"
 
 // Constants
 #define READY       Serial.println(">")
@@ -83,6 +83,7 @@ void toggle() {
 void setup() {
   Serial.begin(BAUD);
   Serial.println(CODEID);
+  g_lcd.cursor(false);
   g_lcd.clear();
   g_lcd.write(CODEID, 0);
 
@@ -103,7 +104,11 @@ void setup() {
     EEPROM_read(EE_SEC, g_buttons.sec);
     EEPROM_read(EE_COUNT, g_buttons.count);
     Serial.println("Loaded last settings form EEPROM");
-    g_lcd.write("Resuming", 1);
+    g_lcd.write("Reloading defaults", 1);
+  }
+  else {
+    Serial.println("Resetting default settings");
+    g_lcd.write("Resetting defaults", 1);
   }
 
   // Button pins (also set the pullup resistors)
@@ -127,6 +132,7 @@ void setup() {
 
 void loop() {
   static unsigned int v = 0;
+  static bool first_time = true;
   char ch;
   if (Serial.available()) {
     ch = Serial.read();
@@ -157,21 +163,23 @@ void loop() {
   }
 
   static const unsigned int cur_l[] = {
-    1, 1, 1, 1, 1, 1      };
+    1, 1, 1, 1, 1, 1        };
   static const unsigned int cur_c[] = {
-    5, 8, 16, 17, 18, 19      };
+    5, 8, 16, 17, 18, 19        };
   bool updated = g_buttons.read();
   if (g_running != g_buttons.shooting)
     toggle();
   g_period = g_buttons.lapse() * 1000;
   char s[20];
-  g_buttons.describe_in(0, s);
-  g_lcd.write(s, 1);
-  g_buttons.describe_in(1, s);
-  g_lcd.write(s, 2);
-  g_lcd.write(g_running ? " RUN" : "IDLE", 0, 16);
-  g_lcd.cursor_at(cur_l[g_buttons.selection], cur_c[g_buttons.selection]);
-
+  if (updated || first_time) {
+    g_buttons.describe_in(0, s);
+    g_lcd.write(s, 1);
+    g_buttons.describe_in(1, s);
+    g_lcd.write(s, 2);
+    g_lcd.write(g_running ? " RUN" : "IDLE", 0, 16);
+    g_lcd.power(g_buttons.en_saving);
+    g_lcd.cursor_at(cur_l[g_buttons.selection], cur_c[g_buttons.selection]);
+  }
   if (updated && g_logging) {
     Serial.print(g_buttons.selection);
     Serial.print(" ");
@@ -182,8 +190,10 @@ void loop() {
     Serial.print(s);
     Serial.println();
   }
+  first_time = false;
   delay(LOOP_DELAY);
 }
+
 
 
 

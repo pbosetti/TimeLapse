@@ -23,7 +23,7 @@ public:
   unsigned int bits;
   unsigned long int last;
   unsigned int selection;
-  bool shooting;
+  bool shooting, en_saving;
   unsigned int min, sec, count;
   
 private:

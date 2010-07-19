@@ -14,6 +14,7 @@ ButtonsClass::ButtonsClass(byte sel, byte dsel, byte inc, byte dec, byte cyc)
   delta = DEFAULT_DELTA;
   selection = 0;
   shooting = false;
+  en_saving = false;
   min = 0;
   sec = 5;
   count = 5;
@@ -47,6 +48,9 @@ bool ButtonsClass::read()
     case 2: // Select button
       if (--selection > S_NUM)
         selection = S_NUM - 1;
+      break;
+    case 3:
+      en_saving = !en_saving;
       break;
     case 4: // Up button
       change(+1);

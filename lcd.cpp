@@ -55,5 +55,10 @@ void LCDClass::cursor(bool onoff)
   SER.write(onoff ? LCD_CURON : LCD_CUROFF);
 }
 
+void LCDClass::power(bool onoff)
+{
+  SER.write(0x7C);
+  SER.write(onoff ? 128 : 157);
+}
 
 
