@@ -2,25 +2,30 @@
 #define buttons_h
 #include "WProgram.h"
 
-struct minsec {
-  unsigned int min;
-  unsigned int sec;
+struct hms_t {
+  unsigned int h;
+  unsigned int m;
+  unsigned int s;
 };
 
 class ButtonsClass {
 public:
-  ButtonsClass(byte sel, byte inc, byte dec, byte cyc);
+  ButtonsClass(byte sel, byte dsel, byte inc, byte dec, byte cyc);
   ~ButtonsClass();
-  void read();
+  bool read();
   void pin_setup(bool pullup);
-  minsec duration();
+  hms_t duration();
   unsigned int lapse();
+  void describe_in(const unsigned int row, char * desc);
+
   byte buttons[4];
   bool states[4];
+  unsigned int bits;
   unsigned long int last;
   unsigned int selection;
   bool shooting;
   unsigned int min, sec, count;
+  
 private:
   void change(int val);
   void count_atomic_increment(int radix, int increment);

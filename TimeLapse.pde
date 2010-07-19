@@ -2,9 +2,10 @@
 #include <EEPROM.h>
 #include "eeprom.h"
 #include "buttons.h"
+#include "lcd.h"
 
 // Code version:
-#define CODEID "TimeLapse 0.1"
+#define CODEID "TimeLapse 0.3 "
 
 // Constants
 #define READY       Serial.println(">")
@@ -14,11 +15,18 @@
 #define RUNNING_LED 13
 #define SHOOT_LED   8
 #define TRIGGER_PIN 10
+#define EEPROM_RESET 12
+#define LCD_PWR     11
 #define SEL_B       2
-#define INC_B       3
-#define DEC_B       4
-#define CYC_B       5
+#define DSL_B       3
+#define INC_B       4
+#define DEC_B       5
+#define CYC_B       6
 
+// EEPROM mem locations
+#define EE_MIN   100
+#define EE_SEC   108
+#define EE_COUNT 116
 
 // Globals
 unsigned int g_period = 0;
@@ -26,8 +34,8 @@ bool g_running = false;
 bool g_logging = false;
 char g_pins[3] = {
   RUNNING_LED, SHOOT_LED, TRIGGER_PIN};
-ButtonsClass g_buttons(SEL_B, INC_B, DEC_B, CYC_B);
-
+ButtonsClass g_buttons(SEL_B, DSL_B, INC_B, DEC_B, CYC_B);
+LCDClass g_lcd(20);
 
 
 void isr_shoot() {
@@ -46,11 +54,6 @@ void isr_shoot() {
 void toggle() {
   if (g_running)
   {
-    Serial1.write(0xFE);
-    Serial1.write(0x01);
-    Serial1.write(0xFE);
-    Serial1.write(64+128);
-    Serial1.print("Idle");
     MsTimer2::stop();
     g_running = false;
     digitalWrite(RUNNING_LED, LOW);
@@ -58,11 +61,9 @@ void toggle() {
   }
   else
   {
-    Serial1.write(0xFE);
-    Serial1.write(0x01);
-    Serial1.write(0xFE);
-    Serial1.write(64+128);
-    Serial1.print("Acquiring");
+    EEPROM_write(EE_MIN, g_buttons.min);
+    EEPROM_write(EE_SEC, g_buttons.sec);
+    EEPROM_write(EE_COUNT, g_buttons.count);
     MsTimer2::set(g_period, isr_shoot);
     MsTimer2::start();
     g_running = true;
@@ -82,17 +83,8 @@ void toggle() {
 void setup() {
   Serial.begin(BAUD);
   Serial.println(CODEID);
-  Serial1.begin(9600);
-  Serial1.write(0xFE);
-  Serial1.write(0x01);
-  Serial1.write(0xFE);
-  Serial1.write(64+128);
-  Serial1.print(CODEID);
-
-  g_buttons.buttons[0] = SEL_B;
-  g_buttons.buttons[1] = INC_B;
-  g_buttons.buttons[2] = DEC_B;
-  g_buttons.buttons[3] = CYC_B;
+  g_lcd.clear();
+  g_lcd.write(CODEID, 0);
 
   // LED Output
   int p;
@@ -101,11 +93,28 @@ void setup() {
     digitalWrite(g_pins[p], LOW);
   }
 
+  pinMode(LCD_PWR, OUTPUT);
+  digitalWrite(LCD_PWR, HIGH);
+
+  pinMode(EEPROM_RESET, INPUT);
+  digitalWrite(EEPROM_RESET, HIGH);
+  if (digitalRead(EEPROM_RESET) == LOW) {
+    EEPROM_read(EE_MIN, g_buttons.min);
+    EEPROM_read(EE_SEC, g_buttons.sec);
+    EEPROM_read(EE_COUNT, g_buttons.count);
+    Serial.println("Loaded last settings form EEPROM");
+    g_lcd.write("Resuming", 1);
+  }
+
   // Button pins (also set the pullup resistors)
   g_buttons.pin_setup(HIGH);
 
   MsTimer2::set(g_period, isr_shoot);
+  delay(1000);
   READY;
+  g_lcd.cursor(true);
+  g_lcd.clear();
+  g_lcd.write(CODEID, 0);
 }
 
 
@@ -147,33 +156,39 @@ void loop() {
     }
   }
 
-  g_buttons.read();
+  static const unsigned int cur_l[] = {
+    1, 1, 1, 1, 1, 1      };
+  static const unsigned int cur_c[] = {
+    5, 8, 16, 17, 18, 19      };
+  bool updated = g_buttons.read();
   if (g_running != g_buttons.shooting)
     toggle();
   g_period = g_buttons.lapse() * 1000;
-  if (g_logging) {
-    for(int i=0; i<4; i++)
-      Serial.print(g_buttons.states[i]);
-    Serial.print(" ");
+  char s[20];
+  g_buttons.describe_in(0, s);
+  g_lcd.write(s, 1);
+  g_buttons.describe_in(1, s);
+  g_lcd.write(s, 2);
+  g_lcd.write(g_running ? " RUN" : "IDLE", 0, 16);
+  g_lcd.cursor_at(cur_l[g_buttons.selection], cur_c[g_buttons.selection]);
+
+  if (updated && g_logging) {
     Serial.print(g_buttons.selection);
     Serial.print(" ");
-    Serial.print(g_buttons.shooting ? 1 : 0);
-    Serial.print(" ");
-    Serial.print(g_buttons.min);
-    Serial.print(":");
-    Serial.print(g_buttons.sec);
-    Serial.print(" ");
-    Serial.print(g_buttons.count);
-    Serial.print(" ");
-    Serial.print(g_buttons.lapse());
-    Serial.print(" ");  
-    Serial.print(g_buttons.duration().min);
-    Serial.print(":");
-    Serial.print(g_buttons.duration().sec);
+    char s[20];
+    g_buttons.describe_in(0, s);
+    Serial.print(s);
+    g_buttons.describe_in(1, s);
+    Serial.print(s);
     Serial.println();
   }
   delay(LOOP_DELAY);
 }
+
+
+
+
+
 
 
 
