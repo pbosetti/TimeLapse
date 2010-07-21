@@ -1,7 +1,7 @@
 #include "buttons.h"
 #define DEFAULT_DELTA 250
 #define B_NUM 5
-#define S_NUM 6
+#define S_NUM 8
 
 ButtonsClass::ButtonsClass(byte sel, byte dsel, byte inc, byte dec, byte cyc) 
 {
@@ -14,10 +14,12 @@ ButtonsClass::ButtonsClass(byte sel, byte dsel, byte inc, byte dec, byte cyc)
   delta = DEFAULT_DELTA;
   selection = 0;
   shooting = false;
-  en_saving = false;
+  en_saving = true;
+  d_hour = 0;
+  d_min = 0;
   min = 0;
-  sec = 5;
-  count = 5;
+  sec = 30;
+  count = 200;
 }
 
 ButtonsClass::~ButtonsClass()
@@ -49,7 +51,7 @@ bool ButtonsClass::read()
       if (--selection > S_NUM)
         selection = S_NUM - 1;
       break;
-    case 3:
+    case 3: // Select up and down together
       en_saving = !en_saving;
       break;
     case 4: // Up button
@@ -90,13 +92,16 @@ unsigned int ButtonsClass::lapse()
 void ButtonsClass::describe_in(const unsigned int row, char * desc)
 {
   switch(row) {
-  case 0:
+  case 1:
+    sprintf(desc, "Start delay: %02dh:%02dm", d_hour, d_min);
+    break;
+  case 2:
     if (count > 0)
       sprintf(desc, "Lap:%02d:%02d Count:%04d\0", min, sec, count);
     else
       sprintf(desc, "Lap:%02d:%02d Count:unl.\0", min, sec);
     break;
-  case 1:
+  case 3:
     sprintf(desc, "Time left:  %02d:%02d:%02d\0", duration().h, duration().m, duration().s);
     break;
   default:
@@ -108,27 +113,36 @@ void ButtonsClass::change(int val)
 {
   switch(selection) {
   case 0:
+    d_hour = constrain(d_hour + val, 0, 24);
+    break;
+  case 1:
+    if (d_min == 0 and val == -1)
+      d_min = 59;
+    else
+      d_min = (d_min + val) % 60;
+    break;
+  case 2:
     if (min == 0 and val == -1)
       min = 59;
     else
       min = (min + val) % 60;
     break;
-  case 1:
+  case 3:
     if (sec == 0 and val == -1)
       sec = 59;
     else
       sec = (sec + val) % 60;
     break;
-  case 2:
+  case 4:
     count_atomic_increment(1000, val);
     break;
-  case 3:
+  case 5:
     count_atomic_increment(100, val);
     break;
-  case 4:
+  case 6:
     count_atomic_increment(10, val);
     break;
-  case 5:
+  case 7:
     count_atomic_increment(1, val);
     break;
   }
@@ -144,6 +158,7 @@ void ButtonsClass::count_atomic_increment(int radix, int increment)
     count = (count + increment * radix);
   count = constrain(count, 0, 9999);
 }
+
 
 
 

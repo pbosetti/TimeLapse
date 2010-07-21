@@ -24,7 +24,7 @@ public:
   unsigned long int last;
   unsigned int selection;
   bool shooting, en_saving;
-  unsigned int min, sec, count;
+  unsigned int d_hour, d_min, min, sec, count;
   
 private:
   void change(int val);
