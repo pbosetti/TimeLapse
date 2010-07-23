@@ -1,18 +1,19 @@
-#include <MsTimer2.h>
 #include <EEPROM.h>
+#include <avr/power.h>
 #include "eeprom.h"
 #include "buttons.h"
 #include "lcd.h"
 
 // Code version:
-#define CODEID "TimeLapse 0.4 "
+#define CODEID "TimeLapse 0.5 "
 
 // Constants
 #define READY       Serial.println(">")
 #define BAUD        9600
-#define LOOP_DELAY  100
+#define LOOP_DELAY  200
 #define SHOOT_DELAY 500
-#define FOCUS_DELAY 500
+#define FOCUS_DELAY 0
+#define PAUSE_DELAY 0
 #define RUNNING_LED 13
 #define SHOOT_LED   10
 #define DELAY_LED   11
@@ -33,30 +34,33 @@
 #define EE_D_M   132
 
 // Globals
-unsigned long int g_start, g_delay = 0;
+unsigned long int g_start, g_delay, g_last_shot = 0;
 unsigned int g_period = 0;
+
 bool g_running = false;
 bool g_logging = false;
 bool g_force_update = true;
+
 char g_status[6] = " IDLE";
 char g_pins[5] = {
   RUNNING_LED, SHOOT_LED, DELAY_LED, TRIGGER_PIN, FOCUS_PIN};
+  
 ButtonsClass g_buttons(SEL_B, DSL_B, INC_B, DEC_B, CYC_B);
 LCDClass g_lcd(20);
 
 
-void isr_shoot() {
-  unsigned long int to_go = g_delay - (millis() - g_start);
+void shoot(unsigned long int now) {
+  unsigned long int to_go = g_delay - (now - g_start);
   if (to_go == 0 || to_go > g_delay) {
-    g_buttons.d_min = 0;
-    g_buttons.d_hour = 0;
+    g_buttons.set_delay(0);
     strcpy(g_status, "  RUN");
     digitalWrite(DELAY_LED, LOW);
     digitalWrite(SHOOT_LED, HIGH);
     digitalWrite(FOCUS_PIN, HIGH);
-    delayMicroseconds(FOCUS_DELAY * 1000);
+    delay(FOCUS_DELAY);
+    delay(PAUSE_DELAY);
     digitalWrite(TRIGGER_PIN, HIGH);
-    delayMicroseconds(SHOOT_DELAY * 1000);
+    delay(SHOOT_DELAY);
     digitalWrite(SHOOT_LED, LOW);  
     digitalWrite(TRIGGER_PIN, LOW);
     if (g_buttons.count > 0) {
@@ -66,21 +70,16 @@ void isr_shoot() {
     }
   }
   else {
+    g_buttons.set_delay(to_go);
     strcpy(g_status, "DELAY");
     digitalWrite(DELAY_LED, HIGH);
-    g_buttons.d_min = (to_go/60000) % 60;
-    g_buttons.d_hour = (to_go/60000) / 60;
-    Serial.print(g_buttons.d_hour);
-    Serial.print(" ");
-    Serial.println(g_buttons.d_min);
   }
   g_force_update = true;
 }
 
-void toggle() {
+void toggle(unsigned long int now) {
   if (g_running)
   {
-    MsTimer2::stop();
     g_running = false;
     digitalWrite(RUNNING_LED, LOW);
     digitalWrite(DELAY_LED, LOW);
@@ -94,11 +93,9 @@ void toggle() {
     EEPROM_write(EE_COUNT, g_buttons.count);
     EEPROM_write(EE_D_H, g_buttons.d_hour);
     EEPROM_write(EE_D_M, g_buttons.d_min);
-    MsTimer2::set(g_period, isr_shoot);
-    MsTimer2::start();
     g_running = true;
-    g_start = millis();
-    g_delay = (g_buttons.d_hour * 60 + g_buttons.d_min) * 60000;
+    g_start = now;
+    g_delay = g_buttons.delay();
     digitalWrite(RUNNING_LED, HIGH);
   }
 }
@@ -118,7 +115,14 @@ void setup() {
   g_lcd.cursor(false);
   g_lcd.clear();
   g_lcd.write(CODEID, 0);
-
+  
+  // Disables unneeded modules so to save energy
+  power_spi_disable();
+  power_twi_disable();
+  power_usart2_disable();
+  power_usart3_disable();
+  power_adc_disable();
+  
   // LED Output
   int p;
   for(p=0; p<5; p++) {
@@ -129,8 +133,7 @@ void setup() {
   // Button pins (also set the pullup resistors)
   g_buttons.pin_setup(HIGH);
 
-//  pinMode(EEPROM_RESET, INPUT);
-//  digitalWrite(EEPROM_RESET, HIGH);
+  // Saving settings or reloading defaults
   if (digitalRead(EEPROM_RESET) == HIGH) {
     EEPROM_read(EE_MIN, g_buttons.min);
     EEPROM_read(EE_SEC, g_buttons.sec);
@@ -145,7 +148,6 @@ void setup() {
     g_lcd.write("Resetting defaults", 1);
   }
 
-  MsTimer2::set(g_period, isr_shoot);
   delay(1000);
   READY;
   g_lcd.cursor(true);
@@ -162,6 +164,8 @@ void setup() {
 //                  |_|    
 
 void loop() {
+  unsigned long int now = millis();
+  // Read serial commands
   static unsigned int v = 0;
   char ch;
   if (Serial.available()) {
@@ -193,13 +197,14 @@ void loop() {
   }
 
   static const unsigned int cur_l[] = {
-    1, 1, 2, 2, 2, 2, 2, 2                };
+    1, 1, 2, 2, 2, 2, 2, 2};
   static const unsigned int cur_c[] = {
-    14, 18, 5, 8, 16, 17, 18, 19                };
-  bool updated = g_buttons.read();
+    14, 18, 5, 8, 16, 17, 18, 19};
+  bool updated = g_buttons.read(now);
   if (g_running != g_buttons.shooting)
-    toggle();
-  g_period = g_buttons.lapse() * 1000;
+    toggle(now);
+    
+  g_period = g_buttons.lapse();
   char s[20];
   if (updated || g_force_update) {
     g_buttons.describe_in(1, s);
@@ -213,10 +218,13 @@ void loop() {
     g_lcd.cursor_at(cur_l[g_buttons.selection], cur_c[g_buttons.selection]);
     g_force_update = false;
   }
+  if (g_running and (now / g_period) > g_last_shot) {
+    g_last_shot = now / g_period;
+    shoot(now);
+  }
   if (updated && g_logging) {
     Serial.print(g_buttons.selection);
     Serial.print(" ");
-    char s[20];
     g_buttons.describe_in(0, s);
     Serial.print(s);
     g_buttons.describe_in(1, s);

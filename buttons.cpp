@@ -10,7 +10,8 @@ ButtonsClass::ButtonsClass(byte sel, byte dsel, byte inc, byte dec, byte cyc)
   buttons[2] = inc;
   buttons[3] = dec;
   buttons[4] = cyc;
-  last = millis();
+  negated_buttons = true;
+  last = 0;
   delta = DEFAULT_DELTA;
   selection = 0;
   shooting = false;
@@ -26,22 +27,24 @@ ButtonsClass::~ButtonsClass()
 {
 }
 
+// Setup for buttons DI pins; note that if pullup == true, buttons are normally closed!
 void ButtonsClass::pin_setup(bool pullup)
 {
+  negated_buttons = pullup;
   for(int p=0; p<B_NUM; p++) {
     pinMode(buttons[p], INPUT);
     digitalWrite(buttons[p], pullup);
   }
 }
 
-bool ButtonsClass::read()
+bool ButtonsClass::read(unsigned long int time)
 {
   bool updated = false;
-  if(millis()-last > delta) {
+  if(time-last > delta) {
     int i;
     updated = true;
     for(i=0; i<B_NUM; i++) {
-      bitWrite(bits, i, !digitalRead(buttons[i])); // Negated because we're using internal pullup resistors
+      bitWrite(bits, i, (negated_buttons ? !digitalRead(buttons[i]) : digitalRead(buttons[i])));
     }
     switch(bits) {
     case 1: // Select button
@@ -66,7 +69,7 @@ bool ButtonsClass::read()
     default:
       updated = false;
     }
-    last = millis();
+    last = time;
   }
   return updated;
 }
@@ -82,10 +85,22 @@ hms_t ButtonsClass::duration()
   return d;
 }
 
-/* Interval between shots, in seconds */
-unsigned int ButtonsClass::lapse()
+/* Interval between shots, in milliseconds */
+unsigned long int ButtonsClass::lapse()
 {
-  return (unsigned int)(min * 60 + sec);
+  return (unsigned long int)(min * 60 + sec) * 1000;
+}
+
+/* Delay to start shooting, in milliseconds */
+unsigned long int ButtonsClass::delay()
+{
+  return (d_hour * 60 + d_min) * 60000;
+}
+
+void ButtonsClass::set_delay(unsigned long int millisec)
+{
+  d_min = (millisec/60000) % 60;
+  d_hour = (millisec/60000) / 60;
 }
 
 /* Description */
@@ -158,6 +173,7 @@ void ButtonsClass::count_atomic_increment(int radix, int increment)
     count = (count + increment * radix);
   count = constrain(count, 0, 9999);
 }
+
 
 
 
