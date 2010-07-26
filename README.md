@@ -8,6 +8,8 @@ The interface with your dSLR camera is the standard 2.5mm TRS jack (tested on Pe
 
 *I plan to add pictures and board sketches here soon, so stay tuned, or ask me directly if you're eager to know more!*
 
+<a href="http://www.flickr.com/photos/pbosetti/4830278177/" title="TimeLapse project: protoboard by Paolo Bosetti, on Flickr"><img src="http://farm5.static.flickr.com/4143/4830278177_f9d3341a52.jpg" width="500" height="334" alt="TimeLapse project: protoboard" /></a>
+
 Functionalities
 ---------------
 The current version has the following functionalities:
