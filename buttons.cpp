@@ -42,9 +42,11 @@ bool ButtonsClass::read(unsigned long int time)
   bool updated = false;
   if(time-last > delta) {
     int i;
+    bool v[B_NUM];
     updated = true;
     for(i=0; i<B_NUM; i++) {
-      bitWrite(bits, i, (negated_buttons ? !digitalRead(buttons[i]) : digitalRead(buttons[i])));
+      v[i] = digitalRead(buttons[i]);
+      bitWrite(bits, i, (negated_buttons ? !v[i] : v[i]));
     }
     switch(bits) {
     case 1: // Select button
@@ -78,7 +80,7 @@ bool ButtonsClass::read(unsigned long int time)
 hms_t ButtonsClass::duration()
 {
   hms_t d;
-  unsigned int s = lapse() * count;
+  unsigned int s = lapse() / 1000 * count;
   d.h = s / 3600;
   d.m = (s % 3600) / 60;
   d.s = (s % 3600) % 60;

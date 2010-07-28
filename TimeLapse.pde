@@ -5,7 +5,7 @@
 #include "lcd.h"
 
 // Code version:
-#define CODEID "TimeLapse 0.5 "
+#define CODEID "TimeLapse 0.5b"
 
 // Constants
 #define READY       Serial.println(">")
@@ -165,6 +165,7 @@ void setup() {
 
 void loop() {
   unsigned long int now = millis();
+  char s[20];
   // Read serial commands
   static unsigned int v = 0;
   char ch;
@@ -186,8 +187,41 @@ void loop() {
       g_buttons.sec = constrain(v,0,59);
       v = 0;
       break;
+    case 'H':
+      g_buttons.d_hour = constrain(v,0,23);
+      v = 0;
+      break;
+    case 'M':
+      g_buttons.d_min = constrain(v,0,59);
+      v = 0;
+      break;
     case 'c':
       g_buttons.count = constrain(v,0,9999);
+      v = 0;
+      break;
+    case 'e':
+      EEPROM_write(EE_MIN, g_buttons.min);
+      EEPROM_write(EE_SEC, g_buttons.sec);
+      EEPROM_write(EE_COUNT, g_buttons.count);
+      EEPROM_write(EE_D_H, g_buttons.d_hour);
+      EEPROM_write(EE_D_M, g_buttons.d_min);
+      Serial.println("Current values saved.");
+      READY;
+      break;
+    case '?':
+      Serial.println("Commands:  xxxc");
+      Serial.println("where xxx is a number, c is one of the following characters:");
+      Serial.println("m: lap minutes, s: lap seconds, c: counter preset");
+      Serial.println("H: hour delay, M: minutes delay");
+      Serial.println("?: status and help, t: toggle shooting, e: save current values");
+      Serial.println("Current status:");
+      g_buttons.describe_in(1, s);
+      Serial.println(s);
+      g_buttons.describe_in(2, s);
+      Serial.println(s);
+      g_buttons.describe_in(3, s);
+      Serial.println(s);
+      READY;
       v = 0;
       break;
     case 't':
@@ -205,7 +239,6 @@ void loop() {
     toggle(now);
     
   g_period = g_buttons.lapse();
-  char s[20];
   if (updated || g_force_update) {
     g_buttons.describe_in(1, s);
     g_lcd.write(s, 1);
@@ -233,23 +266,6 @@ void loop() {
   }
   delay(LOOP_DELAY);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
